@@ -10,6 +10,7 @@ import cn.hutool.core.util.NumberUtil;
 import com.bbw.beans.LoanDetail;
 import com.bbw.beans.LoanPlan;
 import com.bbw.beans.RepayMode;
+import com.bbw.utils.PlanUtils;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -41,6 +42,7 @@ public class MainTest {
         repeyMode.setSpecialMode(1);
         repeyMode.setPrincipalMonth(1);
         repeyMode.setInterestSplit(1);
+        repeyMode.setRepayDay(1);
         List<LoanPlan> loanPlans = main.buildLoanPlanList(startDateTime, dueDateTime, "billNo", "serno", loanAmount, BigDecimal.ZERO, yearRate, repeyMode);
         loanPlans.stream().forEach(LoanPlan::print);
     }
@@ -187,7 +189,7 @@ public class MainTest {
         List<LoanPlan> plans = new ArrayList<LoanPlan>();
         switch (specialMode) {
             case 1:
-                // totalRepayAmount = new BigDecimal(PlanUtils.equalAmountOfInterest(loanAmount, startDateTime, dueDateTime, repayDay, dayRate));
+                 totalRepayAmount = new BigDecimal(PlanUtils.equalAmountOfInterest(loanAmount, startDateTime, dueDateTime, repayDay, dayRate));
                 break;
             case 2:
                 principalRepayAmount = loanAmount.divide(new BigDecimal(term), 12, BigDecimal.ROUND_HALF_UP);
