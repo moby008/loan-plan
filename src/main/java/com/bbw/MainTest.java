@@ -1,16 +1,18 @@
 package com.bbw;
 
+import cn.hutool.core.convert.Convert;
 import cn.hutool.core.date.DateField;
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUnit;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.lang.Console;
 import cn.hutool.core.util.NumberUtil;
 import com.bbw.beans.LoanDetail;
 import com.bbw.beans.LoanPlan;
+import com.bbw.beans.RepayMode;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -19,7 +21,7 @@ import java.util.stream.Collectors;
  * @Version 1.0
  **/
 public class MainTest {
-    public static void main(String[] args) {
+    public static void main1(String[] args) {
         MainTest main = new MainTest();
         int term = 36;
         String startDate = "2020-03-01";
@@ -29,7 +31,19 @@ public class MainTest {
         double preRepayAmount = 21000;
         main.rebuildPlan(loanDetail, preRepayDate, preRepayAmount);
     }
-
+    public static void main(String[] args) {
+        MainTest main = new MainTest();
+        DateTime startDateTime = DateUtil.parseDate("2020-01-01");
+        DateTime dueDateTime = DateUtil.parseDate("2030-01-01");
+        BigDecimal loanAmount = BigDecimal.valueOf(1000000);
+        Float yearRate = Float.valueOf(0.0475f);
+        RepayMode repeyMode = new RepayMode();
+        repeyMode.setSpecialMode(1);
+        repeyMode.setPrincipalMonth(1);
+        repeyMode.setInterestSplit(1);
+        List<LoanPlan> loanPlans = main.buildLoanPlanList(startDateTime, dueDateTime, "billNo", "serno", loanAmount, BigDecimal.ZERO, yearRate, repeyMode);
+        loanPlans.stream().forEach(LoanPlan::print);
+    }
     private LoanDetail initLoanDetail(double amount, int term, String startDate) {
         BigDecimal loanAmount = BigDecimal.valueOf(amount);
         LoanDetail loanDetail = this.buildLoan(term, loanAmount, startDate);
@@ -142,6 +156,119 @@ public class MainTest {
         this.checkPlan(nLoanPlans, loanDetail.getLoanAmount().subtract(BigDecimal.valueOf(preRepayAmount)));
 
 
+    }
+
+    /**
+     * 生成还款计划
+     *
+     * @param startDateTime
+     * @param dueDateTime
+     * @param billNo
+     * @param serno
+     * @param loanAmount
+     * @param loanBalance
+     * @param yearRate
+     * @param repayMode1
+     * @return
+     */
+    public List<LoanPlan> buildLoanPlanList(DateTime startDateTime, DateTime dueDateTime, String billNo, String serno, BigDecimal loanAmount, BigDecimal loanBalance, Float yearRate, RepayMode repayMode1) {
+        int principalMonth = repayMode1.getPrincipalMonth();//还本间隔
+        int interestSplit = repayMode1.getInterestSplit();//还息间隔
+        int repayDay = repayMode1.getRepayDay();//每月20号还款  为0 时 则按放款日对日计算
+        int specialMode = repayMode1.getSpecialMode();//特殊还款方式
+        double tempRepayRate = 0;
+        double repayRate = repayMode1.getRepayRate();//还本比例
+        BigDecimal principalRepayAmount = BigDecimal.ZERO;//当期归还本金
+        BigDecimal totalRepayAmount = BigDecimal.ZERO;//当期归还本金利息总和
+        BigDecimal dayRate = new BigDecimal(yearRate.toString()).divide(new BigDecimal("360"), 12, BigDecimal.ROUND_HALF_UP);//日利率
+        BigDecimal monthRate = new BigDecimal(yearRate.toString()).divide(new BigDecimal("12"), 12, BigDecimal.ROUND_HALF_UP);//月利率
+        int term = Convert.toInt(DateUtil.betweenMonth(startDateTime, dueDateTime, true));//总期数
+        DateTime beginDateTimeOfMonth = startDateTime;
+        List<LoanPlan> plans = new ArrayList<LoanPlan>();
+        switch (specialMode) {
+            case 1:
+                // totalRepayAmount = new BigDecimal(PlanUtils.equalAmountOfInterest(loanAmount, startDateTime, dueDateTime, repayDay, dayRate));
+                break;
+            case 2:
+                principalRepayAmount = loanAmount.divide(new BigDecimal(term), 12, BigDecimal.ROUND_HALF_UP);
+                break;
+            default:
+                ;
+        }
+        //开始生成还款计划
+        for (int i = 1; i <= term && tempRepayRate <= 1; i++) {
+            Date time = new Date();
+            LoanPlan plan = new LoanPlan();
+            plan.setBillNo(billNo);
+            plan.setPeriod(i);
+            plan.setSerno(serno);
+            plan.setTotalPeriod(term);
+            plan.setYearRate(yearRate);
+            plan.setCreateTime(time);
+            //plan.setDataDate(globalParamsService.getOpenDay());
+            plan.setUpdateTime(time);
+            plan.setBeginDate(beginDateTimeOfMonth.toDateStr());
+            plan.setPlanRepayStatus(CPConstants.REPAY_PLAN_INIT);
+            plan.setDataStatus(CPConstants.DATA_STATE_INIT);
+            DateTime nextBeginDateTimeOfMonth = null;
+            if (i % interestSplit == 0 || i == term) {
+                //触发还息计算
+                DateTime intestOffsetMonthTime = DateUtil.offsetMonth(beginDateTimeOfMonth, interestSplit);
+                //还息日期当期
+                DateTime intestDueMonthTime = intestOffsetMonthTime.setField(Calendar.DAY_OF_MONTH, repayDay);
+                if (i == term) {
+                    //最后一期触发日期替换
+                    intestDueMonthTime = dueDateTime;
+                }
+                long days = DateUtil.between(beginDateTimeOfMonth, intestDueMonthTime, DateUnit.DAY);
+                monthRate = dayRate.multiply(Convert.toBigDecimal(days));
+                plan.setTotalDays(Convert.toInt(days));
+                //当期利息金额
+                BigDecimal intestAmount = loanBalance.multiply(dayRate).multiply(new BigDecimal(days));
+                plan.setPlanInterest(intestAmount);
+                plan.setPlanRepayDate(intestDueMonthTime.toDateStr());
+                nextBeginDateTimeOfMonth = intestDueMonthTime;
+            }
+
+            if ((principalMonth > 0 && i % principalMonth == 0) || i == term) {
+                //当期还本金额
+                BigDecimal termPlanPrincipal = BigDecimal.ZERO;
+                if (i == term) {
+                    termPlanPrincipal = loanBalance;
+                    loanBalance = BigDecimal.ZERO;
+                } else {
+                    switch (specialMode) {
+                        case 1:
+                            //termPlanPrincipal = Convert.toBigDecimal(loanAmount.doubleValue()* monthRate.doubleValue() * (Math.pow((1+monthRate.doubleValue()),i-1))/(Math.pow(1+monthRate.doubleValue(),term)-1));
+                            termPlanPrincipal = loanAmount.multiply(monthRate).multiply(monthRate.add(BigDecimal.ONE).pow(i - 1)).divide(monthRate.add(BigDecimal.ONE).pow(term).subtract(BigDecimal.ONE), 2, BigDecimal.ROUND_HALF_UP);
+                            break;
+                        case 2:
+                            termPlanPrincipal = principalRepayAmount;
+                            break;
+                        case 3:
+                            termPlanPrincipal = BigDecimal.ZERO;
+                            break;
+                        default:
+                            tempRepayRate = tempRepayRate + repayRate;
+                            termPlanPrincipal = loanAmount.multiply(new BigDecimal(repayRate));
+                            break;
+
+                    }
+                    loanBalance = loanBalance.subtract(termPlanPrincipal);
+                    //最后一期余额一定为0
+                    if (i == term && loanBalance.compareTo(BigDecimal.ZERO) > 0) {
+                        termPlanPrincipal = termPlanPrincipal.add(loanBalance);
+                        loanBalance = BigDecimal.ZERO;
+                    }
+                }
+                plan.setPlanPrincipal(termPlanPrincipal);
+            }
+            plan.setPlanRemain(loanBalance);
+            plan.setPlanAmount(plan.getPlanPrincipal().add(plan.getPlanInterest()));
+            plans.add(plan);
+            beginDateTimeOfMonth = nextBeginDateTimeOfMonth;
+        }
+        return plans;
     }
 
 }

@@ -4,12 +4,15 @@ package com.bbw.beans;
 import cn.hutool.core.lang.Console;
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.Date;
-
+@NoArgsConstructor
+@AllArgsConstructor
 @Data
 @Builder
 public class LoanPlan implements java.io.Serializable {
@@ -156,7 +159,7 @@ public class LoanPlan implements java.io.Serializable {
     private String dataDate;
 
     public void print() {
-        Console.log("期数:{} 还款时间:{} 还款金额:{} 还款余额:{}", StrUtil.padAfter(this.period.toString(),2," "), StrUtil.padAfter(this.planRepayDate,12," "), StrUtil.padAfter(NumberUtil.decimalFormat("#,##0.00",this.planAmount.doubleValue()),12," "), StrUtil.padAfter(NumberUtil.decimalFormat("#,##0.00",this.planRemain.doubleValue()),12," "));
+        Console.log("期数:{} 还款时间:{} 偿还本金:{} 偿还利息:{} 还款总额:{} 还款后本金余额:{}", StrUtil.padAfter(this.period.toString(),2," "), StrUtil.padAfter(this.planRepayDate,12," "),StrUtil.padAfter(NumberUtil.decimalFormat("#,##0.00",this.planPrincipal.doubleValue()),12," "),StrUtil.padAfter(NumberUtil.decimalFormat("#,##0.00",this.planInterest.doubleValue()),12," "), StrUtil.padAfter(NumberUtil.decimalFormat("#,##0.00",this.planAmount.doubleValue()),12," "), StrUtil.padAfter(NumberUtil.decimalFormat("#,##0.00",this.planRemain.doubleValue()),12," "));
     }
 
 }
