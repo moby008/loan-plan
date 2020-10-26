@@ -6,7 +6,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @Author zhouuan@bankofbbg.com
  * @Date 2020/3/15 15:45
  * @Version 1.0
  **/
